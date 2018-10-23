@@ -148,6 +148,9 @@ type SelectTemplates struct {
 	// promptui will not trim spaces and tabs will be displayed if the template is indented.
 	Details string
 
+	Header string
+	Footer string
+
 	// Help is a text/template for displaying instructions at the top. By default
 	// it shows keys for movement and search.
 	Help string
@@ -164,6 +167,8 @@ type SelectTemplates struct {
 	inactive *template.Template
 	selected *template.Template
 	details  *template.Template
+	header   *template.Template
+	footer   *template.Template
 	help     *template.Template
 }
 
@@ -279,6 +284,19 @@ func (s *Select) innerRun(starting int, top rune) (int, string, error) {
 		items, idx := s.list.Items()
 		last := len(items) - 1
 
+		// header
+		if idx == list.NotFound {
+			sb.WriteString("")
+			sb.WriteString("No results")
+		} else {
+			active := items[idx]
+
+			header := s.renderHeader(active)
+			for _, h := range header {
+				sb.Write(h)
+			}
+		}
+
 		for i, item := range items {
 			page := " "
 
@@ -306,11 +324,17 @@ func (s *Select) innerRun(starting int, top rune) (int, string, error) {
 			sb.Write(output)
 		}
 
+		//Footer and Detail
 		if idx == list.NotFound {
 			sb.WriteString("")
 			sb.WriteString("No results")
 		} else {
 			active := items[idx]
+
+			footer := s.renderFooter(active)
+			for _, h := range footer {
+				sb.Write(h)
+			}
 
 			details := s.renderDetails(active)
 			for _, d := range details {
@@ -429,6 +453,24 @@ func (s *Select) prepareTemplates() error {
 		}
 
 		tpls.details = tpl
+	}
+
+	if tpls.Header != "" {
+		tpl, err = template.New("").Funcs(tpls.FuncMap).Parse(tpls.Header)
+		if err != nil {
+			return err
+		}
+
+		tpls.header = tpl
+	}
+
+	if tpls.Footer != "" {
+		tpl, err = template.New("").Funcs(tpls.FuncMap).Parse(tpls.Footer)
+		if err != nil {
+			return err
+		}
+
+		tpls.footer = tpl
 	}
 
 	if tpls.Help == "" {
@@ -552,6 +594,46 @@ func (s *Select) renderDetails(item interface{}) [][]byte {
 	output := buf.Bytes()
 
 	return bytes.Split(output, []byte("\n"))
+}
+
+func (s *Select) renderHeader(item interface{}) [][]byte {
+	if s.Templates.header == nil {
+		return nil
+	}
+
+	var buf bytes.Buffer
+	w := ansiterm.NewTabWriter(&buf, 0, 0, 8, ' ', 0)
+
+	err := s.Templates.header.Execute(w, item)
+	if err != nil {
+		fmt.Fprintf(w, "%v", item)
+	}
+
+	w.Flush()
+
+	output := buf.Bytes()
+
+	return bytes.Split(output, []byte("\n"))
+}
+
+func (s *Select) renderFooter(item interface{}) [][]byte {
+	if s.Templates.footer == nil {
+		return nil
+	}
+
+	var buf bytes.Buffer
+	w := ansiterm.NewTabWriter(&buf, 0, 0, 8, ' ', 0)
+
+	err := s.Templates.footer.Execute(w, item)
+	if err != nil {
+		fmt.Fprintf(w, "%v", item)
+	}
+
+	w.Flush()
+
+	output := buf.Bytes()
+
+	return bytes.Split(output, []byte("\n"))[1:]
 }
 
 func (s *Select) renderHelp(b bool) []byte {
