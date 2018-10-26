@@ -199,6 +199,11 @@ func (s *Select) Run() (int, string, error) {
 }
 
 func (s *Select) innerRun(starting int, top rune) (int, string, error) {
+	var items []interface{}
+	var idx int
+	var item interface{}
+	var output []byte
+
 	stdin := readline.NewCancelableStdin(os.Stdin)
 	c := &readline.Config{}
 	err := c.Init()
@@ -231,6 +236,8 @@ func (s *Select) innerRun(starting int, top rune) (int, string, error) {
 		switch {
 		case key == KeyEnter:
 			return nil, 0, true
+		case key == 'd':
+			return []rune("end"), 0, true
 		case key == s.Keys.Next.Code || (key == 'j' && !searchMode):
 			s.list.Next()
 		case key == s.Keys.Prev.Code || (key == 'k' && !searchMode):
@@ -348,7 +355,16 @@ func (s *Select) innerRun(starting int, top rune) (int, string, error) {
 	})
 
 	for {
-		_, err = rl.Readline()
+		line, err := rl.Readline()
+
+		if line == "end" {
+			sb.Reset()
+			sb.WriteString("")
+			sb.Flush()
+			rl.Write([]byte(showCursor))
+			rl.Close()
+			return -1, "", err
+		}
 
 		if err != nil {
 			switch {
@@ -379,10 +395,10 @@ func (s *Select) innerRun(starting int, top rune) (int, string, error) {
 		return 0, "", err
 	}
 
-	items, idx := s.list.Items()
-	item := items[idx]
+	items, idx = s.list.Items()
+	item = items[idx]
 
-	output := render(s.Templates.selected, item)
+	output = render(s.Templates.selected, item)
 
 	sb.Reset()
 	sb.Write(output)
@@ -390,7 +406,7 @@ func (s *Select) innerRun(starting int, top rune) (int, string, error) {
 	rl.Write([]byte(showCursor))
 	rl.Close()
 
-	return s.list.Index(), fmt.Sprintf("%v", item), err
+	return s.list.Index(), "", err
 }
 
 func (s *Select) prepareTemplates() error {
